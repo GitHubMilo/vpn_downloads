@@ -145,8 +145,7 @@ services:
   volumes:
    - ./config/cross-seed:/config
    - ./config/qBittorrent/data/BT_backup:/torrents
-   - /share/CACHEDEV3_DATA/Torrent/downloads:/mnt/QnapTorrent/downloads
-   - /share/WDNVMe/downloads/movies:/mnt/QnapTorrent/downloads/movies
+   - /local/path/to/downloads:/mnt/downloads
   command: daemon
   restart: unless-stopped
 
