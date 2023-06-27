@@ -1,7 +1,7 @@
 
 # VPN Downloads
 
-A brief description of what this project does and who it's for
+Download both files to a directory, then edit the .env file and change the appropriate settings:
 
 * PIA_USER: this is your Private Internet Access username
 * PIA_PASS: your Private Internet Access password
