@@ -36,7 +36,7 @@ services:
    - FIREWALL_OUTBOUND_SUBNETS=${NETWORK_SUBNET}/24
    - HTTPPROXY=on
    - SHADOWSOCKS=on
-   - SHADOWSOCKS_PASSWORD=${SHADOW_PASS}
+   - SHADOWSOCKS_PASSWORD=${PIA_PASS}
   restart: unless-stopped
 
  radarr:
