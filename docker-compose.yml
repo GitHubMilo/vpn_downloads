@@ -1,0 +1,191 @@
+version: '3.9'
+services:
+ gluetun:
+  image: qmcgaw/private-internet-access
+  container_name: gluetun
+  cap_add:
+   - NET_ADMIN
+  network_mode: bridge
+  ports:
+   - 8888:8888/tcp # HTTP proxy
+   - 8388:8388/tcp # Shadowsocks
+   - 8388:8388/udp # Shadowsocks
+   - 8000:8000/tcp # Build-in HTTP control header
+# other container ports
+   - 20000:20000   # qbit webui
+   - 50000:50000   # qbit daemon
+   - 2468:2468     # cross-seed
+   - 8787:8787     # readarr
+   - 8989:8989     # sonarr
+   - 7878:7878     # radarr
+   - 8686:8686     # lidarr
+   - 9117:9117     # jackett
+   - 7474:7474     # autorbrr
+   - 8227:8227     # pyload
+   - 8191:8191     # flaresolverr
+  volumes:
+   - ./config/gluetun:/gluetun
+   - ./config/gluetun/port_forward:/tmp/gluetun/forwaded_port
+  environment:
+   - VPNSP=private internet access
+   - TZ=${TZ}
+   - USER=${PIA_USER}
+   - PASSWORD=${PIA_PASS}
+   - REGION=${PIA_REGION}
+   - PORT_FORWARDING=on
+   - FIREWALL_OUTBOUND_SUBNETS=${NETWORK_SUBNET}/24
+   - HTTPPROXY=on
+   - SHADOWSOCKS=on
+   - SHADOWSOCKS_PASSWORD=${SHADOW_PASS}
+  restart: unless-stopped
+
+ radarr:
+  container_name: radarr
+  network_mode: "service:gluetun"
+  restart: unless-stopped
+  volumes:
+    - ./config/Radarr:/config
+    - /local/path/to/Movies:/mnt/Movies
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  image: linuxserver/radarr
+
+ readarr:
+  container_name: readarr
+  network_mode: "service:gluetun"
+  restart: unless-stopped
+  volumes:
+    - ./config/Readarr:/config
+    - /local/path/to/Books:/mnt/Books
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  image: lscr.io/linuxserver/readarr:develop
+
+ sonarr:
+  container_name: sonarr
+  network_mode: "service:gluetun"
+  restart: unless-stopped
+  volumes:
+    - ./config/Sonarr:/config
+    - /local/path/to/TVShows:/mnt/TVShows
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  image: linuxserver/sonarr
+
+ lidarr:
+  container_name: lidarr
+  network_mode: "service:gluetun"
+  restart: unless-stopped
+  volumes:
+    - ./config/Lidarr:/config
+    - /local/path/to/Music:/mnt/Music
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  image: linuxserver/lidarr
+
+ jackett:
+  container_name: jackett
+  network_mode: "service:gluetun"
+  restart: unless-stopped
+  volumes:
+   - ./config:/config
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  image: linuxserver/jackett
+
+ autobrr:
+  container_name: autobrr
+  image: ghcr.io/autobrr/autobrr:latest
+  network_mode: "service:gluetun"
+  restart: unless-stopped
+  user: ${PUID}:${PGID}
+  environment:
+   - TZ=${TZ}
+  volumes:
+   - ./config/autobrr:/config
+
+ prowlarr:
+  image: lscr.io/linuxserver/prowlarr:latest
+  container_name: prowlarr
+  network_mode: "service:gluetun"
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  volumes:
+   - ./config/prowlarr:/config
+  restart: unless-stopped
+
+ flaresolverr:
+  image: ghcr.io/flaresolverr/flaresolverr:latest
+  container_name: flaresolverr
+  network_mode: "service:gluetun"
+  environment:
+   - LOG_LEVEL=${LOG_LEVEL:-info}
+   - LOG_HTML=${LOG_HTML:-false}
+   - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+   - TZ=${TZ}
+  restart: unless-stopped
+
+ cross-seed:
+  image: crossseed/cross-seed:latest
+  network_mode: "service:gluetun"
+  container_name: cross-seed
+  user: ${PUID}:${PGID}
+  volumes:
+   - ./config/cross-seed:/config
+   - ./config/qBittorrent/data/BT_backup:/torrents
+   - /share/CACHEDEV3_DATA/Torrent/downloads:/mnt/QnapTorrent/downloads
+   - /share/WDNVMe/downloads/movies:/mnt/QnapTorrent/downloads/movies
+  command: daemon
+  restart: unless-stopped
+
+ qbittorrent:
+  image: qbittorrentofficial/qbittorrent-nox:latest
+  network_mode: "service:gluetun"
+  container_name: qbittorrent-nox
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+   - QBT_WEBUI_PORT=${QBT_WEBUI_PORT}
+  stop_grace_period: 30m
+  tmpfs:
+   - /tmp
+  volumes:
+   - ./config:/config
+   - ./config/gluetun:/config/data_gluetun
+   - /local/path/to/downloads:/mnt/downloads
+  restart: unless-stopped
+
+ qbittools:
+  image: registry.gitlab.com/alexkm/qbittools
+  network_mode: "service:gluetun"
+  container_name: qbittools
+  volumes:
+   - ./config/qBittorrent/config:/qBittorrent
+  command: reannounce -C /qBittorrent/qBittorrent.conf
+  restart: unless-stopped
+
+ pyload-ng:
+  image: lscr.io/linuxserver/pyload-ng:latest
+  network_mode: "service:gluetun"
+  container_name: pyload-ng
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  volumes:
+   - ./config/pyload:/config
+   - ./downloads:/downloads
+  restart: unless-stopped
