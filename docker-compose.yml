@@ -23,6 +23,7 @@ services:
    - 7474:7474     # autorbrr
    - 8227:8227     # pyload
    - 8191:8191     # flaresolverr
+   - 9696:9696     # prowlarr
   volumes:
    - ./config/gluetun:/gluetun
    - ./config/gluetun/port_forward:/tmp/gluetun/forwaded_port
