@@ -1,43 +1,55 @@
 version: '3.9'
 services:
  gluetun:
-  image: qmcgaw/private-internet-access
+  image: qmcgaw/gluetun
   container_name: gluetun
   cap_add:
    - NET_ADMIN
-  network_mode: bridge
+  network_mode: "bridge"
   ports:
    - 8888:8888/tcp # HTTP proxy
    - 8388:8388/tcp # Shadowsocks
    - 8388:8388/udp # Shadowsocks
    - 8000:8000/tcp # Build-in HTTP control header
 # other container ports
-   - 20000:20000   # qbit webui
-   - 50000:50000   # qbit daemon
-   - 2468:2468     # cross-seed
-   - 8787:8787     # readarr
-   - 8989:8989     # sonarr
-   - 7878:7878     # radarr
-   - 8686:8686     # lidarr
-   - 9117:9117     # jackett
-   - 7474:7474     # autorbrr
-   - 8227:8227     # pyload
-   - 8191:8191     # flaresolverr
-   - 9696:9696     # prowlarr
+   - 20000:20000/tcp   # qbit webui
+   - 20001:20001/tcp   # rutorrent webui
+   - 50000:50000/tcp   # qbit daemon
+   - 50001:50001/tcp   # rtorrent daemon
+   - 2468:2468/tcp     # cross-seed
+   - 2469:2469/tcp     # cross-seed-rtorrent
+   - 5055:5055/tcp     # overseer
+   - 6767:6767/tcp     # bazarr
+   - 8001:8001/tcp     # rutorrent XMLRPC
+   - 8787:8787/tcp     # readarr
+   - 8788:8788/tcp     # readarr_bryce
+   - 8989:8989/tcp     # sonarr
+   - 7878:7878/tcp     # radarr
+   - 8686:8686/tcp     # lidarr
+   - 9117:9117/tcp     # jackett
+   - 7474:7474/tcp     # autorbrr
+   - 8227:8227/tcp     # pyload
+   - 8191:8191/tcp     # flaresolverr
+   - 9000:9000/tcp     # thelounge
+   - 9696:9696/tcp     # prowlarr
   volumes:
-   - ./config/gluetun:/gluetun
-   - ./config/gluetun/port_forward:/tmp/gluetun/forwaded_port
+   - ./config/data_gluetun:/gluetun
   environment:
-   - VPNSP=private internet access
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - VPN_SERVICE_PROVIDER=private internet access
+   - OPENVPN_VERSION=2.5
+   - OPENVPN_USER=${PIA_USER}
+   - OPENVPN_PASSWORD=${PIA_PASS}
+   - VPN_PORT_FORWARDING=on
+   - VPN_PORT_FORWARDING_STATUS_FILE=/gluetun/forwarded_port
+   - UPDATER_PERIOD=24h
    - TZ=${TZ}
-   - USER=${PIA_USER}
-   - PASSWORD=${PIA_PASS}
-   - REGION=${PIA_REGION}
-   - PORT_FORWARDING=on
+   - SERVER_REGIONS=${PIA_REGION}
    - FIREWALL_OUTBOUND_SUBNETS=${NETWORK_SUBNET}/24
    - HTTPPROXY=on
    - SHADOWSOCKS=on
-   - SHADOWSOCKS_PASSWORD=${PIA_PASS}
+   - SHADOWSOCKS_PASSWORD=${SHADOW_PASS}
   restart: unless-stopped
 
  radarr:
@@ -149,6 +161,8 @@ services:
    - /local/path/to/downloads:/mnt/downloads
   command: daemon
   restart: unless-stopped
+  depends_on:
+   - qbittorrent
 
  qbittorrent:
   image: qbittorrentofficial/qbittorrent-nox:latest
@@ -177,6 +191,19 @@ services:
   command: reannounce -C /qBittorrent/qBittorrent.conf
   restart: unless-stopped
 
+ qbittorrent-port:
+  image: charlocharlie/qbittorrent-port-forward-file:latest
+  network_mode: "service:gluetun"
+  container_name: gluetun-qbittorrent-portfw
+  environment:
+   - QBT_USERNAME=${QBT_USER}
+   - QBT_PASSWORD=${QBT_PASS}
+   - QBT_ADDR=http://localhost:${QBT_WEBUI_PORT}
+   - PORT_FILE=/config/data_gluetun/forwarded_port
+  volumes:
+   - ./config:/config:ro
+  restart: unless-stopped
+
  pyload-ng:
   image: lscr.io/linuxserver/pyload-ng:latest
   network_mode: "service:gluetun"
@@ -189,3 +216,32 @@ services:
    - ./config/pyload:/config
    - ./downloads:/downloads
   restart: unless-stopped
+
+  overseerr:
+  image: lscr.io/linuxserver/overseerr:latest
+  container_name: overseerr
+  environment:
+   - PUID=${PUID}
+   - PGID=${PGID}
+   - TZ=${TZ}
+  volumes:
+   - ./config/overseerr:/config
+
+ thelounge:
+  image: ghcr.io/thelounge/thelounge:latest
+  network_mode: "service:gluetun"
+  container_name: thelounge
+  restart: unless-stopped
+  volumes:
+   - ./config/thelounge:/var/opt/thelounge
+
+ doplarr:
+  image: "ghcr.io/kiranshila/doplarr:latest"
+  network_mode: "service:gluetun"
+  container_name: doplarr
+  environment:
+    - SONARR__URL=http://localhost:8989
+    - RADARR__URL=http://localhost:7878
+    - SONARR__API=${SONARR_API_KEY}
+    - RADARR__API=${RADARR_API_KEY}
+    - DISCORD__TOKEN=${DISCORD_BOT_TOKEN}
