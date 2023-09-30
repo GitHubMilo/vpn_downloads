@@ -10,6 +10,8 @@ Download both files to a directory, then edit the .env file and change the appro
 * PUID: this is the Unix user ID of the system user the containers will run as
 * PGID: this is the Unix group ID of the system user the containers will run as
 * QBT_WEBUI_PORT: the port that the qBittorrent client will be accessed via
+* QBT_USER: your qBittorrent user (used for the port forwarding update)
+* QBT_PASS: your qBittorent password (used for the port forwarding update)
 * NETWORK_SUBNET: this should be the machine's local IP address, with a zero at the end rather than whatever is assigned
 
 # Running
@@ -23,12 +25,8 @@ You can then check them using:
 
 ## Configuring
 
-# qBittorrent
-The forwarded port for PIA will be stored in the ./config/guetun/piaportforward.json file
-So you can view that to grab the port you need to put into qBittorrent's config (I haven't yet got around to making a script that automates this.
-
 # Other software
-All configuration files should be in the ./config directory
+All configuration files should be in the "./config" directory (below where your docker-compose.yml file is.
 
 ## Accessing
 You should be able to access using the local IP address and the services's port.
