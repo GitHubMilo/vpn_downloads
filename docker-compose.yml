@@ -1,10 +1,11 @@
 version: '3.9'
 services:
- gluetun:
+ vpn:
   image: qmcgaw/gluetun
   container_name: gluetun
   cap_add:
    - NET_ADMIN
+   - SYS_MODULE
   network_mode: "bridge"
   ports:
    - 8888:8888/tcp # HTTP proxy
@@ -12,10 +13,10 @@ services:
    - 8388:8388/udp # Shadowsocks
    - 8000:8000/tcp # Build-in HTTP control header
 # other container ports
-   - 20000:20000/tcp   # qbit webui
-   - 20001:20001/tcp   # rutorrent webui
-   - 50000:50000/tcp   # qbit daemon
-   - 50001:50001/tcp   # rtorrent daemon
+   - ${QBT_WEBUI_PORT}:${QBT_WEBUI_PORT}/tcp   # qbit webui
+   - ${RT_UI_PORT}:${RT_UI_PORT}/tcp   # rutorrent webui
+   - ${QBT_DAEMON_PORT}:${QBT_DAEMON_PORT}/tcp   # qbit daemon
+   - ${RT_INC_PORT}:${RT_INC_PORT}/tcp   # rtorrent daemon
    - 2468:2468/tcp     # cross-seed
    - 2469:2469/tcp     # cross-seed-rtorrent
    - 5055:5055/tcp     # overseer
@@ -32,29 +33,45 @@ services:
    - 9000:9000/tcp     # thelounge
    - 9696:9696/tcp     # prowlarr
   volumes:
-   - ./config/data_gluetun:/gluetun
+   - ./config/gluetun:/gluetun
+   - ./config/pia:/pia
+   - ./config/pia-shared:/pia-shared
   environment:
+   - DOT=off
    - PUID=${PUID}
    - PGID=${PGID}
+   - TZ=${TZ}
    - VPN_SERVICE_PROVIDER=private internet access
-   - OPENVPN_VERSION=2.5
+   - OPENVPN_VERSION=2.6
    - OPENVPN_USER=${PIA_USER}
    - OPENVPN_PASSWORD=${PIA_PASS}
    - VPN_PORT_FORWARDING=on
    - VPN_PORT_FORWARDING_STATUS_FILE=/gluetun/forwarded_port
    - UPDATER_PERIOD=24h
-   - TZ=${TZ}
    - SERVER_REGIONS=${PIA_REGION}
    - FIREWALL_OUTBOUND_SUBNETS=${NETWORK_SUBNET}/24
    - HTTPPROXY=on
    - SHADOWSOCKS=on
    - SHADOWSOCKS_PASSWORD=${SHADOW_PASS}
+  sysctls:
+   # wg-quick fails to set this without --privileged, so set it here instead if needed
+   - net.ipv4.conf.all.src_valid_mark=1
+   # May as well disable ipv6. Should be blocked anyway.
+   - net.ipv6.conf.default.disable_ipv6=1
+   - net.ipv6.conf.all.disable_ipv6=1
+   - net.ipv6.conf.lo.disable_ipv6=1
+   # The container has no recovery logic. Use a healthcheck to catch disconnects.
+  healthcheck:
+   test: ping -c 1 www.google.com || exit 1
+   interval: 60s
+   timeout: 20s
+   retries: 5
   restart: unless-stopped
 
  # A library / filter system for movies
  radarr:
   container_name: radarr
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   restart: unless-stopped
   volumes:
     - ./config/Radarr:/config
@@ -68,7 +85,7 @@ services:
  # A library / filter system for books
  readarr:
   container_name: readarr
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   restart: unless-stopped
   volumes:
     - ./config/Readarr:/config
@@ -82,7 +99,7 @@ services:
  # A library / filter system for TV shows
  sonarr:
   container_name: sonarr
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   restart: unless-stopped
   volumes:
     - ./config/Sonarr:/config
@@ -96,7 +113,7 @@ services:
  # A library / filter system for music
  lidarr:
   container_name: lidarr
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   restart: unless-stopped
   volumes:
     - ./config/Lidarr:/config
@@ -110,7 +127,7 @@ services:
  # A tool that enables a single API to search trackers
  jackett:
   container_name: jackett
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   restart: unless-stopped
   volumes:
    - ./config:/config
@@ -124,7 +141,7 @@ services:
  autobrr:
   container_name: autobrr
   image: ghcr.io/autobrr/autobrr:latest
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   restart: unless-stopped
   user: ${PUID}:${PGID}
   environment:
@@ -136,7 +153,7 @@ services:
  prowlarr:
   image: lscr.io/linuxserver/prowlarr:latest
   container_name: prowlarr
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   environment:
    - PUID=${PUID}
    - PGID=${PGID}
@@ -149,7 +166,7 @@ services:
  flaresolverr:
   image: ghcr.io/flaresolverr/flaresolverr:latest
   container_name: flaresolverr
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   environment:
    - LOG_LEVEL=${LOG_LEVEL:-info}
    - LOG_HTML=${LOG_HTML:-false}
@@ -160,7 +177,7 @@ services:
  # A tool that automates cross-seeding within qBittorrent
  cross-seed:
   image: crossseed/cross-seed:latest
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   container_name: cross-seed
   user: ${PUID}:${PGID}
   volumes:
@@ -175,7 +192,7 @@ services:
  # The qBittorrent client
  qbittorrent:
   image: qbittorrentofficial/qbittorrent-nox:latest
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   container_name: qbittorrent-nox
   environment:
    - PUID=${PUID}
@@ -190,11 +207,13 @@ services:
    - ./config/gluetun:/config/data_gluetun
    - /local/path/to/downloads:/mnt/downloads
   restart: unless-stopped
+  depends_on:
+   - vpn
 
  # Utility to automatically run a 'reannounce' job on qBittorrent (for stalled torrents)
  qbittools:
   image: registry.gitlab.com/alexkm/qbittools
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   container_name: qbittools
   volumes:
    - ./config/qBittorrent/config:/qBittorrent
@@ -205,7 +224,7 @@ services:
  rutorrent:
   image: crazymax/rtorrent-rutorrent:latest
   container_name: rutorrent
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   environment:
    - XMLRPC_PORT=8001
    - WEBDAV_PORT=9001
@@ -222,22 +241,23 @@ services:
  # A tool to automatically update qbittorrent with the gluetun port-forward value
  qbittorrent-port:
   image: charlocharlie/qbittorrent-port-forward-file:latest
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   container_name: gluetun-qbittorrent-portfw
   environment:
    - QBT_USERNAME=${QBT_USER}
    - QBT_PASSWORD=${QBT_PASS}
    - QBT_ADDR=http://localhost:${QBT_WEBUI_PORT}
-   - PORT_FILE=/config/data_gluetun/forwarded_port
+   - PORT_FILE=/config/gluetun/forwarded_port
   volumes:
    - ./config:/config:ro
   restart: unless-stopped
   depends_on:
    - qbittorrent
+   - vpn
 
  pyload-ng:
   image: lscr.io/linuxserver/pyload-ng:latest
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   container_name: pyload-ng
   environment:
    - PUID=${PUID}
@@ -271,7 +291,7 @@ services:
  # A discord bot, to interact with Overseerr (or Radarr / Sonarr)
  doplarr:
   image: "ghcr.io/kiranshila/doplarr:latest"
-  network_mode: "service:gluetun"
+  network_mode: "service:vpn"
   container_name: doplarr
   environment:
     - SONARR__URL=http://localhost:8989
@@ -279,3 +299,33 @@ services:
     - SONARR__API=${SONARR_API_KEY}
     - RADARR__API=${RADARR_API_KEY}
     - DISCORD__TOKEN=${DISCORD_BOT_TOKEN}
+
+ qbit_manage:
+  network_mode: "service:vpn"
+  container_name: qbit_manage
+  image: ghcr.io/hotio/qbitmanage:latest
+  volumes:
+   - ./config/qbit_manage/:/config:rw
+   - ./config/qBittorrent/:/qBittorrent/:ro
+  environment:
+   - QBT_RUN=true
+   - QBT_SCHEDULE=30
+   - QBT_CONFIG=config.yml
+   - QBT_LOGFILE=activity.log
+   - QBT_CROSS_SEED=false
+   - QBT_RECHECK=false
+   - QBT_CAT_UPDATE=false
+   - QBT_TAG_UPDATE=false
+   - QBT_REM_UNREGISTERED=false
+   - QBT_REM_ORPHANED=false
+   - QBT_TAG_TRACKER_ERROR=false
+   - QBT_TAG_NOHARDLINKS=false
+   - QBT_SHARE_LIMITS=false
+   - QBT_SKIP_CLEANUP=false
+   - QBT_DRY_RUN=true
+   - QBT_LOG_LEVEL=INFO
+   - QBT_DIVIDER==
+   - QBT_WIDTH=100
+  restart: on-failure:2
+  depends_on:
+    - qbittorrent
